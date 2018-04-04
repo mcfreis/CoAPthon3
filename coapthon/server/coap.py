@@ -1,9 +1,9 @@
-import logging.config
-import os
+import logging
 import random
 import socket
 import struct
 import threading
+import collections
 
 from coapthon import defines
 from coapthon.layers.blocklayer import BlockLayer
@@ -17,7 +17,6 @@ from coapthon.messages.response import Response
 from coapthon.resources.resource import Resource
 from coapthon.serializer import Serializer
 from coapthon.utils import Tree
-import collections
 
 
 __author__ = 'Giacomo Tanganelli'
