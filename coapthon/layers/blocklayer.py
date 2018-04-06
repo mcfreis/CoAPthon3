@@ -28,7 +28,7 @@ class BlockItem(object):
         self.content_type = content_type
 
 
-class BlockLayer(object):
+class _BlockLayer(object):
     """
     Handle the Blockwise options. Hides all the exchange to both servers and clients.
     """
@@ -319,3 +319,15 @@ class BlockLayer(object):
         transaction.response.code = code
         return transaction
 
+
+# if True:
+if False:
+
+    class BlockLayer(_BlockLayer):
+        pass
+
+else:
+
+    from .blocklayer_async import BlockLayer as _BlockLayerAsync
+    class BlockLayer(_BlockLayerAsync):
+        pass
