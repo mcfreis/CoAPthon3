@@ -114,7 +114,7 @@ class Serializer(object):
                     message.payload = ""
                     payload = values[pos:]
                     try:
-                        if message.payload_type == defines.Content_types["application/octet-stream"]:
+                        if message.payload_type in [defines.Content_types["application/octet-stream"], defines.Content_types["application/cbor"]]:
                             message.payload = payload
                         else:
                             message.payload = payload.decode("utf-8")
