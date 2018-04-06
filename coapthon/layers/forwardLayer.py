@@ -58,20 +58,16 @@ class ForwardLayer(object):
             transaction = self._server.resourceLayer.discover(transaction)
         else:
             new = False
+            local_path_parts = self._server.root.with_prefix(path)
+            local_path = max(local_path_parts, key=len)
             if transaction.request.code == defines.Codes.POST.number:
-                new_paths = self._server.root.with_prefix(path)
-                new_path = "/"
-                for tmp in new_paths:
-                    if len(tmp) > len(new_path):
-                        new_path = tmp
-                if path != new_path:
+                if path != local_path:
                     new = True
-                path = new_path
             try:
-                resource = self._server.root[path]
+                resource = self._server.root[local_path]
             except KeyError:
                 resource = None
-            if resource is None or path == '/':
+            if resource is None or local_path == '/':
                 # Not Found
                 transaction.response.code = defines.Codes.NOT_FOUND.number
             else:
