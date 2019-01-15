@@ -17,6 +17,7 @@ from coapthon.messages.response import Response
 from coapthon.resources.resource import Resource
 from coapthon.serializer import Serializer
 from coapthon.utils import Tree
+import collections
 
 
 __author__ = 'Giacomo Tanganelli'
@@ -78,18 +79,10 @@ class CoAP(object):
             # Join group
             if addrinfo[0] == socket.AF_INET:  # IPv4
                 self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-
-                # Allow multiple copies of this program on one machine
-                # (not strictly needed)
                 self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 self._socket.bind(('', self.server_address[1]))
-
                 mreq = struct.pack("4sl", socket.inet_aton(defines.ALL_COAP_NODES), socket.INADDR_ANY)
                 self._socket.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-                self._unicast_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                self._unicast_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                self._unicast_socket.bind(self.server_address)
-
             else:
                 # Bugfix for Python 3.6 for Windows ... missing IPPROTO_IPV6 constant
                 if not hasattr(socket, 'IPPROTO_IPV6'):
@@ -106,10 +99,6 @@ class CoAP(object):
                 group_bin = socket.inet_pton(socket.AF_INET6, addrinfo_multicast[4][0])
                 mreq = group_bin + struct.pack('@I', 0)
                 self._socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_JOIN_GROUP, mreq)
-                self._unicast_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-                self._unicast_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                self._unicast_socket.bind(self.server_address)
-
         else:
             if addrinfo[0] == socket.AF_INET:  # IPv4
                 self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -257,10 +246,7 @@ class CoAP(object):
             logger.debug("send_datagram - " + str(message))
             serializer = Serializer()
             message = serializer.serialize(message)
-            if self.multicast:
-                self._unicast_socket.sendto(message, (host, port))
-            else:
-                self._socket.sendto(message, (host, port))
+            self._socket.sendto(message, (host, port))
 
     def add_resource(self, path, resource):
         """
@@ -284,8 +270,6 @@ class CoAP(object):
             except KeyError:
                 res = None
             if res is None:
-                if len(paths) != i:
-                    return False
                 resource.path = actual_path
                 self.root[actual_path] = resource
         return True
