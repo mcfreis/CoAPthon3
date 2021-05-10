@@ -80,9 +80,9 @@ class MessageLayer(object):
         else:
             request.timestamp = time.time()
             transaction = Transaction(request=request, timestamp=request.timestamp)
-            with transaction:
-                self._transactions[key_mid] = transaction
-                self._transactions_token[key_token] = transaction
+            # with transaction:  # who else could use this newly created transaction except us at this moment?!
+            self._transactions[key_mid] = transaction
+            self._transactions_token[key_token] = transaction
         return transaction
 
     def receive_response(self, response):

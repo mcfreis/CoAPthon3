@@ -5,6 +5,8 @@ import struct
 import threading
 import collections
 
+import time
+
 from coapthon import defines
 from coapthon.layers.blocklayer import BlockLayer
 from coapthon.layers.messagelayer import MessageLayer
@@ -16,6 +18,7 @@ from coapthon.messages.request import Request
 from coapthon.messages.response import Response
 from coapthon.resources.resource import Resource
 from coapthon.serializer import Serializer
+from coapthon.transaction import Transaction
 from coapthon.utils import Tree
 
 
@@ -39,10 +42,11 @@ class CoAP(object):
         :param sock: if a socket has been created externally, it can be used directly
         :param cb_ignore_listen_exception: Callback function to handle exception raised during the socket listen operation
         """
+        self.worker_threads = list()
         self.stopped = threading.Event()
         self.stopped.clear()
         self.to_be_stopped = []
-        self.purge = threading.Thread(target=self.purge)
+        self.purge = threading.Thread(target=self.purge, name="purge-%d" % threading._counter())
         self.purge.start()
 
         self._messageLayer = MessageLayer(starting_mid)
@@ -125,6 +129,7 @@ class CoAP(object):
         """
         self._socket.settimeout(float(timeout))
         while not self.stopped.isSet():
+            self.clean_worker_threads()
             try:
                 data, client_address = self._socket.recvfrom(4096)
                 if len(client_address) > 2:
@@ -162,8 +167,8 @@ class CoAP(object):
                         logger.debug("message duplicated, transaction NOT completed")
                         self._send_ack(transaction)
                         continue
-                    args = (transaction, )
-                    t = threading.Thread(target=self.receive_request, args=args)
+                    t = threading.Thread(target=self.wrap_receive_request, name="recv-req-%d" % threading._counter(), args=(transaction, ))
+                    self.worker_threads.append(t)
                     t.start()
                 # self.receive_datagram(data, client_address)
                 elif isinstance(message, Response):
@@ -172,13 +177,30 @@ class CoAP(object):
                 else:  # is Message
                     transaction = self._messageLayer.receive_empty(message)
                     if transaction is not None:
-                        with transaction:
-                            self._blockLayer.receive_empty(message, transaction)
-                            self._observeLayer.receive_empty(message, transaction)
+                        # with transaction:  # who else could use this newly created transaction except us at this moment?!
+                        self._blockLayer.receive_empty(message, transaction)
+                        self._observeLayer.receive_empty(message, transaction)
 
+            except Transaction.TransactionTimeout as te:
+                logger.exception(te)
             except RuntimeError:
                 logger.exception("Exception with Executor")
+        while self.clean_worker_threads():
+            time.sleep(0.05)
         self._socket.close()
+
+    def clean_worker_threads(self):
+        cnt_total = len(self.worker_threads)
+        remove_threads = list()
+        for t in self.worker_threads:  # type: threading.Thread
+            if not t.is_alive():
+                remove_threads.append(t)
+        cnt_to_remove = len(remove_threads)
+        for t in remove_threads:  # type: threading.Thread
+            removed = self.worker_threads.pop(self.worker_threads.index(t))
+            removed.join()
+        logger.debug("Start: %d - removed: %d = remaining: %d" % (cnt_total, cnt_to_remove, len(self.worker_threads)))
+        return len(self.worker_threads) == 0
 
     def close(self):
         """
@@ -189,6 +211,12 @@ class CoAP(object):
         self.stopped.set()
         for event in self.to_be_stopped:
             event.set()
+
+    def wrap_receive_request(self, transaction):
+        try:
+            self.receive_request(transaction=transaction)
+        except Exception as e:
+            logger.error("Exception in receive_request: %s" % repr(e))
 
     def receive_request(self, transaction):
         """
@@ -308,26 +336,27 @@ class CoAP(object):
         with transaction:
             if message.type == defines.Types['CON']:
                 future_time = random.uniform(defines.ACK_TIMEOUT, (defines.ACK_TIMEOUT * defines.ACK_RANDOM_FACTOR))
+                retransmit_stop = threading.Event()
+                self.to_be_stopped.append(retransmit_stop)
                 transaction.retransmit_thread = threading.Thread(target=self._retransmit,
-                                                                 args=(transaction, message, future_time, 0))
-                transaction.retransmit_stop = threading.Event()
-                self.to_be_stopped.append(transaction.retransmit_stop)
+                                                                 name="retransmit-%d" % threading._counter(),
+                                                                 args=(transaction, message, future_time, retransmit_stop, 0))
                 transaction.retransmit_thread.start()
 
-    def _retransmit(self, transaction, message, future_time, retransmit_count):
+    def _retransmit(self, transaction, message, future_time, retransmit_stop, retransmit_count):
         """
         Thread function to retransmit the message in the future
 
         :param transaction: the transaction that owns the message that needs retransmission
         :param message: the message that needs the retransmission task
         :param future_time: the amount of time to wait before a new attempt
+        :param retransmit_stop:
         :param retransmit_count: the number of retransmissions
         """
-        with transaction:
+        if True:
             while retransmit_count < defines.MAX_RETRANSMIT and (not message.acknowledged and not message.rejected) \
                     and not self.stopped.isSet():
-                if transaction.retransmit_stop is not None:
-                    transaction.retransmit_stop.wait(timeout=future_time)
+                retransmit_stop.wait(timeout=future_time)
                 if not message.acknowledged and not message.rejected and not self.stopped.isSet():
                     retransmit_count += 1
                     future_time *= 2
@@ -342,10 +371,10 @@ class CoAP(object):
                     self._observeLayer.remove_subscriber(message)
 
             try:
-                self.to_be_stopped.remove(transaction.retransmit_stop)
+                self.to_be_stopped.remove(retransmit_stop)
             except ValueError:
                 pass
-            transaction.retransmit_stop = None
+
             transaction.retransmit_thread = None
 
     def _start_separate_timer(self, transaction):
@@ -356,7 +385,8 @@ class CoAP(object):
         :param transaction: the transaction that is in processing
         :rtype : the Timer object
         """
-        t = threading.Timer(defines.ACK_TIMEOUT, self._send_ack, (transaction,))
+        t = threading.Timer(defines.ACK_TIMEOUT, self._send_ack_wrapper, (transaction,))
+        t.name = "ack-timer-%d" % threading._counter()
         t.start()
         return t
 
@@ -368,6 +398,12 @@ class CoAP(object):
         :param timer: The Timer object
         """
         timer.cancel()
+
+    def _send_ack_wrapper(self, transaction):
+        try:
+            self._send_ack(transaction=transaction)
+        except Exception as e:
+            logger.error("Exception in _send_ack: %s" % repr(e))
 
     def _send_ack(self, transaction):
         """
@@ -402,5 +438,4 @@ class CoAP(object):
                 if transaction.response is not None:
                     if transaction.response.type == defines.Types["CON"]:
                         self._start_retransmission(transaction, transaction.response)
-
                     self.send_datagram(transaction.response)

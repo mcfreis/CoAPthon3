@@ -1,9 +1,16 @@
 import threading
+import logging
 
 __author__ = 'Giacomo Tanganelli'
 
+logger = logging.getLogger(__name__)
+
 
 class Transaction(object):
+
+    class TransactionTimeout(TimeoutError):
+        pass
+
     """
     Transaction object to bind together a request, a response and a resource.
     """
@@ -32,10 +39,15 @@ class Transaction(object):
         self.cached_element = None
 
     def __enter__(self):
-        self._lock.acquire()
+        if not self._lock.acquire(timeout=10.0):
+            raise self.TransactionTimeout("Timeout acquiring transaction")
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._lock.release()
+        if exc_type is None:
+            self._lock.release()
+            return True
+        return False
 
     @property
     def response(self):
