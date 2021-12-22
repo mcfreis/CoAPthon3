@@ -82,7 +82,8 @@ class RequestLayer(object):
         :return: the edited transaction with the response to the request
         """
         path = str("/" + transaction.request.uri_path)
-        transaction.response = Response()
+        if not isinstance(transaction.response, Response):
+            transaction.response = Response()
         transaction.response.destination = transaction.request.source
         transaction.response.token = transaction.request.token
         try:
@@ -107,7 +108,8 @@ class RequestLayer(object):
         :return: the edited transaction with the response to the request
         """
         path = str("/" + transaction.request.uri_path)
-        transaction.response = Response()
+        if not isinstance(transaction.response, Response):
+            transaction.response = Response()
         transaction.response.destination = transaction.request.source
         transaction.response.token = transaction.request.token
 

@@ -95,6 +95,11 @@ class BlockLayer(object):
                 del transaction.request.block1
                 transaction.block_transfer = False
                 del self._block1_receive[key_token]
+                transaction.response = Response()
+                transaction.response.destination = transaction.request.source
+                transaction.response.token = transaction.request.token
+                transaction.response.code = defines.Codes.CHANGED.number
+                transaction.response.block1 = (num, m, size)
                 return transaction
             else:
                 # Continue
@@ -233,7 +238,6 @@ class BlockLayer(object):
 
                 self._block2_receive[key_token] = BlockItem(byte, num, m, size)
 
-                
             # correct m
             m = 0 if ((num * size) + size) > len(transaction.response.payload) else 1
             # add size2 if requested or if payload is bigger than one datagram
