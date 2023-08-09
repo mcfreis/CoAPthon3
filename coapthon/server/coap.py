@@ -130,6 +130,11 @@ class CoAP(object):
         self._socket.settimeout(float(timeout))
         while not self.stopped.isSet():
             self.clean_worker_threads()
+            # don't overload the system
+            if len(self.worker_threads) > 100:
+                time.sleep(0.1)
+                continue
+            # we have free capacity ... go ahead
             try:
                 data, client_address = self._socket.recvfrom(4096)
                 if len(client_address) > 2:
