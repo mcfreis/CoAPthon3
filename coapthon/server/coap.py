@@ -129,9 +129,12 @@ class CoAP(object):
         """
         self._socket.settimeout(float(timeout))
         while not self.stopped.isSet():
-            self.clean_worker_threads()
+            MAX_THREADS = 100
+            # clean only if we have to
+            if len(self.worker_threads) > MAX_THREADS//2:
+                self.clean_worker_threads()
             # don't overload the system
-            if len(self.worker_threads) > 100:
+            if len(self.worker_threads) > MAX_THREADS:
                 time.sleep(0.1)
                 continue
             # we have free capacity ... go ahead
