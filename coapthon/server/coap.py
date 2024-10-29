@@ -166,18 +166,19 @@ class CoAP(object):
                 logger.info("receive_datagram - " + str(message))
                 if isinstance(message, Request):
                     transaction = self._messageLayer.receive_request(message)
-                    if transaction.request.duplicated and transaction.completed:
-                        logger.debug("message duplicated, transaction completed")
-                        if transaction.response is not None:
-                            self.send_datagram(transaction.response)
-                        continue
-                    elif transaction.request.duplicated and not transaction.completed:
-                        logger.debug("message duplicated, transaction NOT completed")
-                        self._send_ack(transaction)
-                        continue
-                    t = threading.Thread(target=self.wrap_receive_request, name="recv-req-%d" % threading._counter(), args=(transaction, ))
-                    self.worker_threads.append(t)
-                    t.start()
+                    with transaction:
+                        if transaction.request.duplicated and transaction.completed:
+                            logger.debug("message duplicated, transaction completed")
+                            if transaction.response is not None:
+                                self.send_datagram(transaction.response)
+                            continue
+                        elif transaction.request.duplicated and not transaction.completed:
+                            logger.debug("message duplicated, transaction NOT completed")
+                            self._send_ack(transaction)
+                            continue
+                        t = threading.Thread(target=self.wrap_receive_request, name="recv-req-%d" % threading._counter(), args=(transaction, ))
+                        self.worker_threads.append(t)
+                        t.start()
                 # self.receive_datagram(data, client_address)
                 elif isinstance(message, Response):
                     logger.error("Received response from %s", message.source)
@@ -190,7 +191,7 @@ class CoAP(object):
                         self._observeLayer.receive_empty(message, transaction)
 
             except Transaction.TransactionTimeout as te:
-                logger.exception(te)
+                logger.error(str(te))
             except RuntimeError:
                 logger.exception("Exception with Executor")
         while self.clean_worker_threads():
@@ -410,8 +411,10 @@ class CoAP(object):
     def _send_ack_wrapper(self, transaction):
         try:
             self._send_ack(transaction=transaction)
+        except Transaction.TransactionTimeout as te:
+            logger.error(str(te))
         except Exception as e:
-            logger.error("Exception in _send_ack: %s" % repr(e))
+            logger.exception(e)
 
     def _send_ack(self, transaction):
         """
