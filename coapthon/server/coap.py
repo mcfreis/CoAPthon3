@@ -166,7 +166,7 @@ class CoAP(object):
                 logger.info("receive_datagram - " + str(message))
                 if isinstance(message, Request):
                     transaction = self._messageLayer.receive_request(message)
-                    with transaction:
+                    if True:
                         if transaction.request.duplicated and transaction.completed:
                             logger.debug("message duplicated, transaction completed")
                             if transaction.response is not None:
