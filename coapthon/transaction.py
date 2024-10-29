@@ -44,9 +44,7 @@ class Transaction(object):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if exc_type is None:
-            self._lock.release()
-            return True
+        self._lock.release()
         return False
 
     @property

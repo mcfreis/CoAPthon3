@@ -246,7 +246,7 @@ class MessageLayer(object):
             except AttributeError:
                 return
             key_mid = utils.str_append_hash(host, port, transaction.response.mid)
-            self._transactions[key_mid] = transaction
+            # self._transactions[key_mid] = transaction
 
         transaction.request.acknowledged = True
         return transaction
