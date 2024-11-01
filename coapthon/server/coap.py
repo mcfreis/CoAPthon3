@@ -143,6 +143,7 @@ class CoAP(object):
                 if len(client_address) > 2:
                     client_address = (client_address[0], client_address[1])
             except socket.timeout:
+                time.sleep(0.001)
                 continue
             except Exception as e:
                 if self._cb_ignore_listen_exception is not None and isinstance(self._cb_ignore_listen_exception, collections.Callable):
