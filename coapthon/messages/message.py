@@ -722,9 +722,9 @@ class Message(object):
         msg += "]"
         if self.payload is not None:
             if isinstance(self.payload, dict):
-                tmp = list(self.payload.values())[0][0:20]
+                tmp = list(self.payload.values())[0][0:80]
             else:
-                tmp = self.payload[0:20]
+                tmp = self.payload[0:80]
             msg += " {payload}...{length} bytes".format(payload=tmp, length=len(self.payload))
         else:
             msg += " No payload"
