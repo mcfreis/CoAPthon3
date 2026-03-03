@@ -3,7 +3,7 @@ import random
 import socket
 import threading
 import time
-import collections
+import typing
 
 from coapthon import defines
 from coapthon.layers.blocklayer import BlockLayer
@@ -167,7 +167,7 @@ class CoAP(object):
         try:
             self._socket.sendto(raw_message, (host, port))
         except Exception as e:
-            if self._cb_ignore_write_exception is not None and isinstance(self._cb_ignore_write_exception, collections.Callable):
+            if self._cb_ignore_write_exception is not None and isinstance(self._cb_ignore_write_exception, typing.Callable):
                 if not self._cb_ignore_write_exception(e, self):
                     raise
 
@@ -254,7 +254,7 @@ class CoAP(object):
             except socket.timeout:  # pragma: no cover
                 continue
             except Exception as e:  # pragma: no cover
-                if self._cb_ignore_read_exception is not None and isinstance(self._cb_ignore_read_exception, collections.Callable):
+                if self._cb_ignore_read_exception is not None and isinstance(self._cb_ignore_read_exception, typing.Callable):
                     if self._cb_ignore_read_exception(e, self):
                         continue
                 return
